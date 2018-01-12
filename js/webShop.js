@@ -10,11 +10,11 @@
         container = document.body,
         camera, renderer, scene,
         // 加载的obj模型的集合
-        object,
+        object = new THREE.Group(),
         // 存放camera摄像机，用于平滑旋转
         cameraGroup,
         // 射线，用于鼠标交互
-        raycaster = new THREE.Raycaster(),
+        raycaster = new THREE.Raycaster(),OBJECT,
         // 记录点击或移动的鼠标的位置
         mouse,
         // 需要进行交互的物体的集合
@@ -41,9 +41,10 @@
             defaults = Object.assign({}, defaults, params);
             // 定义场景
             scene = new THREE.Scene();
+            scene.updateMatrixWorld(true);
             // 定义摄像机
             camera = new THREE.PerspectiveCamera(45, win.innerWidth / win.innerHeight, 1, 20000);
-            camera.position.set(0,1000,2000); // 设置相机位置
+            camera.position.set(0,100,200); // 设置相机位置
             cameraGroup = new THREE.Group();
             cameraGroup.add(camera);
             scene.add(cameraGroup);
@@ -54,7 +55,9 @@
             pointLight.position.set(100,200,500); // 设置点光位置
             cameraGroup.add(pointLight);
             // 定义渲染器
-            renderer = new THREE.WebGLRenderer();
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
             // renderer.setClearColor(0xffffff); // 设置背景颜色
             // renderer.setPixelRatio(win.devicePixelRatio); // 设置高分屏下的显示效果(在手机屏幕上会出现位置错误，比如原点不在屏幕中心)
             renderer.setSize(win.innerWidth, win.innerHeight); // 设置画布大小
@@ -86,7 +89,7 @@
                 console.log(item, loaded, total);
             };
             // 启用OBJLoader插件
-            var loader = new THREE.OBJLoader(manager);
+            var loader = new THREE.TDSLoader(manager);
             // 加载函数，返回promise对象的集合
             function load(){
                 var p = []; // 定义返回的promise对象集合
@@ -112,30 +115,34 @@
                         item.traverse( function ( child ) {
                             if ( child instanceof THREE.Mesh ) {
                                 // 设置内部几何体的默认颜色
-                                child.material.color.set(0x156289);
+                                child.material.color.setRGB(Math.random(),Math.random(),Math.random());
                                 // 设置几何体居中显示
-                                child.geometry.center();
+                                // child.geometry.center();
                                 // 获取几何体的尺寸
                                 child.geometry.computeBoundingBox();
                                 size = child.geometry.boundingBox.getSize();
                                 // 将几何体加入可交互的集合中
                                 raycasterGroup.push(child);
+                                // console.log(child.name);
                             }
                         } );
-                        // 将模型从 中心点在原点 移动到 边缘在原点
-                        item.position.set(size.x / 2, index * 200 + size.y/2, size.z / 2);
                         console.log(item);
+                        // 将模型从 中心点在原点 移动到 边缘在原点
+                        item.position.y = index * 400;
+                        // item.rotation.z = Math.PI;
+                        // console.log((new THREE.Vector3()).setFromMatrixPosition(item.matrixWorld));
+                        // item.position.set(size.x / 2, index * 400 + size.y/2, size.z / 2);
                         // 添加模型辅助线
                         var helper = new THREE.BoxHelper(item, 0xff00ff);
                         helper.update();
                         scene.add(helper);
 
-                        scene.add(item);
+                        object.add(item);
                     });
-                    object = obj;
-                    console.log(object);
+                    scene.add(object);
+                    // object = obj;
                     // 将摄像机群的中心点移动到第一个模型的中心点，这样模型的中心点就能放到屏幕中间
-                    cameraGroup.position.set(obj[0].position.x, obj[0].position.y, obj[0].position.z);
+                    // cameraGroup.position.set(obj[0].position.x, obj[0].position.y, obj[0].position.z);
                 })
                 .catch(function(err){
                     console.log(err);
@@ -161,6 +168,7 @@
                     INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
                     // 设置交互时的颜色
                     INTERSECTED.material.emissive.setHex(0xff0000);
+                    this.focusObj();
                 }
             }else{
                 // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
@@ -169,6 +177,13 @@
                 INTERSECTED = null;
             }
         },
+        focusObj:function(){
+            if(!INTERSECTED) return;
+            if(INTERSECTED.parent === OBJECT) return;
+            OBJECT = INTERSECTED.parent;
+            createjs.Tween.get(cameraGroup.position)
+                .to({x: OBJECT.position.x, y:OBJECT.position.y, z: OBJECT.position.z},600, createjs.Ease.sineInOut)
+        },
         // 移动鼠标的操作
         onMouseMove:function(event){
             mouse = new THREE.Vector2();
@@ -176,12 +191,12 @@
             mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
         },
         rotateY:function(deg){
-            cameraGroup.rotation.y = deg * 0.01;
+            object.rotation.y = deg * 0.01;
         },
         scale:function(num){
             num = Math.max(0.1, num);
             num = Math.min(1.9, num);
-            cameraGroup.scale.set(num, num, num);
+            object.scale.set(num, num, num);
         },
         // 添加辅助坐标系
         addAxes:function(){
@@ -201,17 +216,19 @@
         },
         // 渲染每一帧
         render:function(){
-            // cameraGroup.rotation.y += 0.005;
+            // object.rotation.y += 0.005;
             camera.lookAt( scene.position );
             // 更新相机位置
             camera.updateMatrixWorld();
             // 执行交互函数
-            this.raycastFn();
+
             renderer.render( scene, camera );
         },
         bindEvent:function(){
             var self = this;
             var mc = new Hammer(document.body);
+
+            var cameraGroupPostion;
             mc.get('pinch').set({ enable: true });
             mc.get('rotate').set({ enable: true });
 
@@ -219,31 +236,48 @@
                 mouse = new THREE.Vector2();
                 mouse.x = (ev.center.x / window.innerWidth) * 2 - 1;
                 mouse.y = -(ev.center.y / window.innerHeight) * 2 + 1 ;
+                self.raycastFn();
+            });
+            mc.on('panstart', function(ev){
+               cameraGroupPostion = self.clone(cameraGroup.position);
+            });
+            mc.on('panmove', function(ev){
+                cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX;
+                cameraGroup.position.y = cameraGroupPostion.y +  ev.deltaY;
             });
             mc.on('pinchstart',function(ev){
                 if(!currentScale) currentScale = 1;
                 startScale = ev.scale;
             });
             mc.on('pinchmove',function(ev){
-                var _s = -(ev.scale - startScale);
+                var _s = (ev.scale - startScale);
                 self.scale( currentScale + _s);
             });
             mc.on('pinchend', function(ev){
-                currentScale += -(ev.scale - startScale);
+                currentScale += (ev.scale - startScale);
                 currentScale = Math.max(0.01, currentScale);
                 currentScale = Math.min(1.99, currentScale);
             });
             mc.on('rotatestart', function(ev){
-                if(!currentRotation) currentRotation = 0;
+                if(!currentRotation) currentRotation = object.rotation.y;
                 startRotation = ev.rotation;
             });
             mc.on('rotatemove', function(ev){
-                var _r = ev.rotation - startRotation;
+                var _r = -(ev.rotation - startRotation);
                 self.rotateY(currentRotation + _r);
             });
             mc.on('rotateend',function(ev){
-                currentRotation +=  ev.rotation - startRotation;
+                currentRotation +=  -(ev.rotation - startRotation);
             })
+        },
+        clone:function(src){
+            if(src === undefined || src === null) return null;
+            if(typeof src === 'string'|| typeof src === 'number' || typeof src === 'boolean') return src;
+            var target = {};
+            for(var name in src){
+                target[name] = src[name];
+            }
+            return target;
         }
     };
     WebShop.prototype.init.prototype = WebShop.prototype;

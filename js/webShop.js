@@ -112,6 +112,7 @@
                     obj.forEach(function(item, index){
                         // 通常item为mesh对象
                         var size = null; // 定义mesh中的几何体的大小
+                        // console.log(item)
                         item.traverse( function ( child ) {
                             if ( child instanceof THREE.Mesh ) {
                                 // 设置内部几何体的默认颜色
@@ -126,7 +127,6 @@
                                 // console.log(child.name);
                             }
                         } );
-                        console.log(item);
                         // 将模型从 中心点在原点 移动到 边缘在原点
                         item.position.y = index * 400;
                         // item.rotation.z = Math.PI;
@@ -161,18 +161,18 @@
                 // 如果当前交互的对象就是 射线射到的第一个对象，则不重复处理
                 if(INTERSECTED != intersects[ 0 ].object){
                     // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
-                    if(INTERSECTED) INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+                    if(INTERSECTED) INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
                     // 将第一个物体设置为当前交互的物体
                     INTERSECTED = intersects[0].object;
                     // 获取物体的颜色
-                    INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+                    INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
                     // 设置交互时的颜色
-                    INTERSECTED.material.emissive.setHex(0xff0000);
+                    INTERSECTED.material.color.setHex(0xff0000);
                     this.focusObj();
                 }
             }else{
                 // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
-                if(INTERSECTED) INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+                if(INTERSECTED) INTERSECTED.material.color.setHex(INTERSECTED.currentHex);
                 // 清空当前交互物体
                 INTERSECTED = null;
             }
@@ -242,8 +242,8 @@
                cameraGroupPostion = self.clone(cameraGroup.position);
             });
             mc.on('panmove', function(ev){
-                cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX;
-                cameraGroup.position.y = cameraGroupPostion.y +  ev.deltaY;
+                cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX / 10;
+                cameraGroup.position.z = cameraGroupPostion.z -  ev.deltaY / 10;
             });
             mc.on('pinchstart',function(ev){
                 if(!currentScale) currentScale = 1;
@@ -260,14 +260,15 @@
             });
             mc.on('rotatestart', function(ev){
                 if(!currentRotation) currentRotation = object.rotation.y;
-                startRotation = ev.rotation;
+                startRotation = Math.round(ev.rotation);
             });
             mc.on('rotatemove', function(ev){
-                var _r = -(ev.rotation - startRotation);
+                var _r = -(Math.round(ev.rotation) - startRotation);
                 self.rotateY(currentRotation + _r);
+                // console.log(Math.round(ev.rotation), startRotation)
             });
             mc.on('rotateend',function(ev){
-                currentRotation +=  -(ev.rotation - startRotation);
+                currentRotation +=  -(Math.round(ev.rotation) - startRotation);
             })
         },
         clone:function(src){

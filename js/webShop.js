@@ -22,7 +22,8 @@
         // 当前交互的对象
         INTERSECTED,
         // 当前缩放倍数和旋转角度 , 按下时旋转角度
-        currentScale,currentRotation, startScale, startRotation,
+        currentScale,currentRotation, startScale, prevRotation,
+        DOM,virtualDom,
         // 默认参数
         defaults = {
             objUrl:null
@@ -63,6 +64,10 @@
             renderer.setSize(win.innerWidth, win.innerHeight); // 设置画布大小
             container.appendChild(renderer.domElement); // 添加画布
             container.style.cssText = 'margin:0;padding:0;overflow:hidden;'; // 设置画布css
+
+            DOM = document.createElement('div');
+            DOM.style.cssText = 'position:absolute;left:0;top:0;height:0;';
+            document.body.appendChild(DOM);
 
             this.loadObj();
             this.addAxes();
@@ -112,7 +117,8 @@
                     obj.forEach(function(item, index){
                         // 通常item为mesh对象
                         var size = null; // 定义mesh中的几何体的大小
-                        // console.log(item)
+                        // 将模型从 中心点在原点 移动到 边缘在原点
+                        item.position.y = index * 400;
                         item.traverse( function ( child ) {
                             if ( child instanceof THREE.Mesh ) {
                                 // 设置内部几何体的默认颜色
@@ -122,13 +128,12 @@
                                 // 获取几何体的尺寸
                                 child.geometry.computeBoundingBox();
                                 size = child.geometry.boundingBox.getSize();
+                                child.peak = self.computePeak.call(self, child.geometry.boundingBox, item.position);
                                 // 将几何体加入可交互的集合中
                                 raycasterGroup.push(child);
-                                // console.log(child.name);
                             }
                         } );
-                        // 将模型从 中心点在原点 移动到 边缘在原点
-                        item.position.y = index * 400;
+                        console.log(item);
                         // item.rotation.z = Math.PI;
                         // console.log((new THREE.Vector3()).setFromMatrixPosition(item.matrixWorld));
                         // item.position.set(size.x / 2, index * 400 + size.y/2, size.z / 2);
@@ -178,6 +183,7 @@
             }
         },
         focusObj:function(){
+            console.log(INTERSECTED)
             if(!INTERSECTED) return;
             if(INTERSECTED.parent === OBJECT) return;
             OBJECT = INTERSECTED.parent;
@@ -191,7 +197,7 @@
             mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
         },
         rotateY:function(deg){
-            object.rotation.y = deg * 0.01;
+            object.rotation.y = deg;
         },
         scale:function(num){
             num = Math.max(0.1, num);
@@ -213,6 +219,32 @@
                 self.animate.call(self);
             });
             self.render();
+            self.updateDom();
+        },
+        updateDom:function(){
+            // var time = new Date().getTime();
+            var self = this;
+            DOM.innerHTML = '';
+            virtualDom = document.createElement('div');
+            if(raycasterGroup.length<=0) return;
+            var i = 0, len = raycasterGroup.length;
+            for( ; i < len; i++){
+                var ray = raycasterGroup[i];
+                if(ray.dom === false) continue;
+                // if(ray.dom === undefined) {
+                    var vector = self.toScreen(ray.peak);
+                    var dom = document.createElement('div');
+                    dom.innerText = ray.name;
+                    dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
+                    virtualDom.appendChild(dom);
+                    ray.dom = dom;
+                // }else{
+                //     var vector = self.toScreen(ray.peak);
+                //     ray.dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
+                // }
+            }
+            DOM.appendChild(virtualDom);
+            // console.log((new Date().getTime() - time) )
         },
         // 渲染每一帧
         render:function(){
@@ -259,17 +291,55 @@
                 currentScale = Math.min(1.99, currentScale);
             });
             mc.on('rotatestart', function(ev){
-                if(!currentRotation) currentRotation = object.rotation.y;
-                startRotation = Math.round(ev.rotation);
+                currentRotation = object.rotation.y;
+                prevRotation = Math.round(ev.rotation);
             });
             mc.on('rotatemove', function(ev){
-                var _r = -(Math.round(ev.rotation) - startRotation);
-                self.rotateY(currentRotation + _r);
-                // console.log(Math.round(ev.rotation), startRotation)
+                if(prevRotation != null){
+                    if( ev.rotation - prevRotation < -180) {
+                        prevRotation -= 360;
+                    }else if(ev.rotation - prevRotation > 180){
+                        prevRotation += 360;
+                    }
+                    currentRotation += -(ev.rotation - prevRotation) * 0.01;
+                }
+                self.rotateY(currentRotation);
+                prevRotation = ev.rotation;
             });
             mc.on('rotateend',function(ev){
-                currentRotation +=  -(Math.round(ev.rotation) - startRotation);
+                prevRotation = null;
             })
+        },
+        toScreen:function(peak){
+            var vector = new THREE.Vector3(peak.x, peak.y, peak.z);
+            var standardVector = vector.project(camera);
+            var a = window.innerWidth / 2;
+            var b = window.innerHeight / 2;
+            return {
+                x: Math.round( standardVector.x * a + a),
+                y: Math.round( -standardVector.y * b + b)
+            }
+
+        },
+        computePeak:function(vertex, reference){
+            var vector = {
+                min: {
+                    x: vertex.min.x + reference.x,
+                    y: vertex.min.y + reference.y,
+                    z: vertex.min.z + reference.z
+                },
+                max: {
+                    x: vertex.max.x + reference.x,
+                    y: vertex.max.y + reference.y,
+                    z: vertex.max.z + reference.z
+                }
+            };
+
+            return {
+                x: (vertex.max.x + vertex.min.x) / 2,
+                y : vertex.max.y,
+                z : (vertex.max.z + vertex.min.z) / 2
+            }
         },
         clone:function(src){
             if(src === undefined || src === null) return null;

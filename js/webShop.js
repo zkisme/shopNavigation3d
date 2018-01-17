@@ -23,7 +23,7 @@
         INTERSECTED,
         // 当前缩放倍数和旋转角度 , 按下时旋转角度
         currentScale,currentRotation, startScale, prevRotation,
-        DOM,virtualDom,
+        DOM,
         // 默认参数
         defaults = {
             objUrl:null
@@ -131,6 +131,7 @@
                                 child.peak = self.computePeak.call(self, child.geometry.boundingBox, item.position);
                                 // 将几何体加入可交互的集合中
                                 raycasterGroup.push(child);
+                                window.child = child;
                             }
                         } );
                         console.log(item);
@@ -145,6 +146,7 @@
                         object.add(item);
                     });
                     scene.add(object);
+                    self.updateDom.call(self);
                     // object = obj;
                     // 将摄像机群的中心点移动到第一个模型的中心点，这样模型的中心点就能放到屏幕中间
                     // cameraGroup.position.set(obj[0].position.x, obj[0].position.y, obj[0].position.z);
@@ -219,32 +221,71 @@
                 self.animate.call(self);
             });
             self.render();
-            self.updateDom();
+            // self.updateDom();
         },
         updateDom:function(){
             // var time = new Date().getTime();
             var self = this;
-            DOM.innerHTML = '';
-            virtualDom = document.createElement('div');
             if(raycasterGroup.length<=0) return;
-            var i = 0, len = raycasterGroup.length;
-            for( ; i < len; i++){
-                var ray = raycasterGroup[i];
-                if(ray.dom === false) continue;
-                // if(ray.dom === undefined) {
-                    var vector = self.toScreen(ray.peak);
-                    var dom = document.createElement('div');
-                    dom.innerText = ray.name;
-                    dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
-                    virtualDom.appendChild(dom);
-                    ray.dom = dom;
-                // }else{
-                //     var vector = self.toScreen(ray.peak);
-                //     ray.dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
-                // }
-            }
-            DOM.appendChild(virtualDom);
+            raycasterGroup.forEach(function(ray){
+                if(ray.dom === false) return;
+                // setTimeout(function(){
+                    if(!ray.dom){
+                        var vector = self.toScreen(ray.peak);
+                        var dom = document.createElement('div');
+                        dom.innerText = ray.name;
+                        dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;color:blue;white-space: nowrap;';
+                        DOM.appendChild(dom);
+                        ray.dom = dom;
+                    }else{
+                        var vector = self.toScreen(ray.peak);
+                        if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return;
+                        ray.dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;color:blue;white-space: nowrap;';
+                        ray.domStyle = {
+                            x: vector.x,
+                            y: vector.y
+                        }
+                    }
+                // },60);
+            })
+
+            // function group(){
+            //     var p = [];
+            //     raycasterGroup.forEach(function(ray){
+            //         p.push( new Promise(function(resolve, reject){
+            //             if(ray.dom === false) return resolve();
+            //             // setTimeout(function(){
+            //                 if(!ray.dom){
+            //                     var vector = self.toScreen(ray.peak);
+            //                     var dom = document.createElement('div');
+            //                     dom.innerText = ray.name;
+            //                     dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
+            //                     DOM.appendChild(dom);
+            //                     ray.dom = dom;
+            //                     resolve()
+            //                 }else{
+            //                     var vector = self.toScreen(ray.peak);
+            //                     if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return resolve();
+            //                     ray.domStyle = {
+            //                         x: vector.x,
+            //                         y: vector.y
+            //                     }
+            //                     // setTimeout(function(){
+            //                         ray.dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
+            //                         resolve();
+            //                     // },60)
+            //                 }
+            //             // },60);
+            //         }))
+            //     })
+            //     return p;
+            // }
+
+            // Promise.all(group()).then(function(){ DOM.style.display = 'block'})
             // console.log((new Date().getTime() - time) )
+
+            
+            
         },
         // 渲染每一帧
         render:function(){
@@ -271,12 +312,17 @@
                 self.raycastFn();
             });
             mc.on('panstart', function(ev){
+                DOM.style.display = 'none';
                cameraGroupPostion = self.clone(cameraGroup.position);
             });
             mc.on('panmove', function(ev){
                 cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX / 10;
                 cameraGroup.position.z = cameraGroupPostion.z -  ev.deltaY / 10;
             });
+            mc.on('panend',function(){
+                self.updateDom.call(self);
+                DOM.style.display = 'block';
+            })
             mc.on('pinchstart',function(ev){
                 if(!currentScale) currentScale = 1;
                 startScale = ev.scale;
@@ -289,6 +335,8 @@
                 currentScale += (ev.scale - startScale);
                 currentScale = Math.max(0.01, currentScale);
                 currentScale = Math.min(1.99, currentScale);
+                obj.updateMatrix();
+                self.updateDom.call(self)
             });
             mc.on('rotatestart', function(ev){
                 currentRotation = object.rotation.y;

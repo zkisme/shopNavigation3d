@@ -8,7 +8,7 @@
 
     var doc,
         container = document.body,
-        camera, renderer, scene,
+        camera, renderer, scene, control,
         // 加载的obj模型的集合
         object = new THREE.Group(),
         // 存放camera摄像机，用于平滑旋转
@@ -59,15 +59,23 @@
             renderer = new THREE.WebGLRenderer({
                 antialias: true
             });
+            
             // renderer.setClearColor(0xffffff); // 设置背景颜色
-            // renderer.setPixelRatio(win.devicePixelRatio); // 设置高分屏下的显示效果(在手机屏幕上会出现位置错误，比如原点不在屏幕中心)
+            renderer.setPixelRatio(win.devicePixelRatio); // 设置高分屏下的显示效果(在手机屏幕上会出现位置错误，比如原点不在屏幕中心)
             renderer.setSize(win.innerWidth, win.innerHeight); // 设置画布大小
+            console.log(win.innerWidth, win.innerHeight, window.innerWidth)
             container.appendChild(renderer.domElement); // 添加画布
-            container.style.cssText = 'margin:0;padding:0;overflow:hidden;'; // 设置画布css
+            container.style.cssText = 'margin:0;padding:0;overflow:hidden;position:fixed;width:100vw;height:100vh;'; // 设置画布css
 
             DOM = document.createElement('div');
             DOM.style.cssText = 'position:absolute;left:0;top:0;height:0;';
             document.body.appendChild(DOM);
+
+            control = new THREE.OrbitControls(camera, renderer.domElement);
+            control.dispose();
+            control.minZoom = 0.2;
+            control.maxZoom = 3;
+            control.update();
 
             this.loadObj();
             this.addAxes();
@@ -199,12 +207,13 @@
             mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
         },
         rotateY:function(deg){
-            object.rotation.y = deg;
+            // object.rotation.y = deg;
+            control.rotateLeft(deg*.1);
         },
         scale:function(num){
             num = Math.max(0.1, num);
             num = Math.min(1.9, num);
-            object.scale.set(num, num, num);
+            cameraGroup.scale.set(num, num, num);
         },
         // 添加辅助坐标系
         addAxes:function(){
@@ -220,6 +229,7 @@
             requestAnimationFrame(function(){
                 self.animate.call(self);
             });
+            control.update();
             self.render();
             // self.updateDom();
         },
@@ -290,7 +300,7 @@
         // 渲染每一帧
         render:function(){
             // object.rotation.y += 0.005;
-            camera.lookAt( scene.position );
+            // camera.lookAt( scene.position );
             // 更新相机位置
             camera.updateMatrixWorld();
             // 执行交互函数
@@ -298,6 +308,56 @@
             renderer.render( scene, camera );
         },
         bindEvent:function(){
+            var self = this;
+            var mc = new Hammer(document.body);
+
+            var cameraGroupPostion;
+            mc.get('pinch').set({ enable: true });
+            mc.get('rotate').set({ enable: true });
+            
+            mc.on('tap',function(ev){
+                mouse = new THREE.Vector2();
+                mouse.x = (ev.center.x / window.innerWidth) * 2 - 1;
+                mouse.y = -(ev.center.y / window.innerHeight) * 2 + 1 ;
+                self.raycastFn();
+            });
+            mc.on('panstart', function(ev){
+                DOM.style.display = 'none'
+                control.panStart(ev);
+            })
+            mc.on('panmove', function(ev){
+                control.panMove(ev);
+            });
+            mc.on('panend', function(ev){
+                control.panEnd(ev);
+                self.updateDom.call(self);
+                DOM.style.display = 'block';
+            })
+            mc.on('rotatestart', function(ev){
+                DOM.style.display = 'none'
+                control.rotateStart(ev)
+            })
+            mc.on('rotatemove', function(ev){
+                control.rotateMove(ev);
+            })
+            mc.on('rotateend', function(ev){
+                control.rotateEnd(ev);
+                self.updateDom.call(self);
+                DOM.style.display = 'block';
+            })
+            mc.on('pinchstart', function(ev){
+                DOM.style.display = 'none'
+                control.scaleStart(ev);
+            })
+            mc.on('pinchmove', function(ev){
+                control.scaleMove(ev);
+            })
+            mc.on('pinchend', function(ev){
+                self.updateDom.call(self);
+                DOM.style.display = 'block';
+            })
+        },
+        bindEvent2:function(){
             var self = this;
             var mc = new Hammer(document.body);
 
@@ -316,23 +376,25 @@
                cameraGroupPostion = self.clone(cameraGroup.position);
             });
             mc.on('panmove', function(ev){
-                cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX / 10;
-                cameraGroup.position.z = cameraGroupPostion.z -  ev.deltaY / 10;
+                // cameraGroup.position.x = cameraGroupPostion.x -  ev.deltaX / 5;
+                // cameraGroup.position.z = cameraGroupPostion.z -  ev.deltaY / 5;
+                // control.panMove(ev.deltaX, ev.deltaY);
             });
             mc.on('panend',function(){
                 self.updateDom.call(self);
                 DOM.style.display = 'block';
             })
             mc.on('pinchstart',function(ev){
-                if(!currentScale) currentScale = 1;
+                if(!currentScale) currentScale = cameraGroup.scale.x;
                 startScale = ev.scale;
             });
             mc.on('pinchmove',function(ev){
-                var _s = (ev.scale - startScale);
-                self.scale( currentScale + _s);
+                var _s = -(ev.scale - startScale);
+                // control.rotateLeft(_s);
+                // self.scale( currentScale + _s);
             });
             mc.on('pinchend', function(ev){
-                currentScale += (ev.scale - startScale);
+                currentScale += -(ev.scale - startScale);
                 currentScale = Math.max(0.01, currentScale);
                 currentScale = Math.min(1.99, currentScale);
                 obj.updateMatrix();

@@ -317,7 +317,7 @@ THREE.OrbitControls = function ( object, domElement ) {
 		return function panUp( distance, objectMatrix ) {
 
 			v.setFromMatrixColumn( objectMatrix, 1 ); // get Y column of objectMatrix
-			v.multiplyScalar( distance );
+			v.multiplyScalar( -distance );
 
 			panOffset.add( v );
 
@@ -899,21 +899,81 @@ THREE.OrbitControls = function ( object, domElement ) {
     function rotateLeft2( angle ) {
         sphericalDelta.theta = angle;
     }
+    var panUp2 = function () {
+
+        var v = new THREE.Vector3();
+
+		return function panUp2( distance, objectMatrix ) {
+            var newMatrix = objectMatrix.clone();
+            // newMatrix.elements[8] = scope.object.position.x;
+            // newMatrix.elements[9] = scope.object.position.y;
+            newMatrix.elements[10] = scope.object.position.z;
+            v.setFromMatrixColumn( newMatrix, 2); // get Y column of objectMatrix
+            v.multiplyScalar( -distance / 10 );
+
+			panOffset.add( v );
+
+		};
+
+	}();
+    var pan2 = function () {
+
+        var offset = new THREE.Vector3();
+
+		return function pan( deltaX, deltaY ) {
+
+			var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
+
+			if ( scope.object.isPerspectiveCamera ) {
+
+				// perspective
+				var position = scope.object.position;
+				offset.copy( position ).sub( scope.target );
+				var targetDistance = offset.length();
+
+				// half of the fov is center to top of screen
+				targetDistance *= Math.tan( ( scope.object.fov / 2 ) * Math.PI / 180.0 );
+
+				// we actually don't use screenWidth, since perspective camera is fixed to screen height
+				panLeft( 2 * deltaX * targetDistance / element.clientHeight, scope.object.matrix );
+				panUp2( 2 * deltaY * targetDistance / element.clientHeight , scope.object.matrix );
+
+			} else if ( scope.object.isOrthographicCamera ) {
+
+				// orthographic
+				panLeft( deltaX * ( scope.object.right - scope.object.left ) / scope.object.zoom / element.clientWidth, scope.object.matrix );
+				panUp( deltaY * ( scope.object.top - scope.object.bottom ) / scope.object.zoom / element.clientHeight, scope.object.matrix );
+
+			} else {
+
+				// camera neither orthographic nor perspective
+				console.warn( 'WARNING: OrbitControls.js encountered an unknown camera type - pan disabled.' );
+				scope.enablePan = false;
+
+			}
+
+		};
+
+	}();
     
     scope.panStart = function(event){
         if ( scope.enablePan === false ) return;
-
-        panStart.set( event.center.x, event.center.y );
+        console.log(spherical.radius)
+        var x = event.center.x * 220 / spherical.radius;
+        var y = event.center.y * 220 / spherical.radius;
+        panStart.set( x, y );
 
         state = STATE.PAN;
     }
     
     scope.panMove = function(event){
-        panEnd.set( event.center.x, event.center.y );
+        var x = event.center.x * 220 / spherical.radius;
+        var y = event.center.y * 220 / spherical.radius;
+        panEnd.set( x, y );
         
 		panDelta.subVectors( panEnd, panStart );
 
-		pan( panDelta.x, panDelta.y );
+		pan2( panDelta.x, panDelta.y );
 
 		panStart.copy( panEnd );
 

@@ -904,12 +904,12 @@ THREE.OrbitControls = function ( object, domElement ) {
         var v = new THREE.Vector3();
 
 		return function panUp2( distance, objectMatrix ) {
-            var newMatrix = objectMatrix.clone();
-            // newMatrix.elements[8] = scope.object.position.x;
-            // newMatrix.elements[9] = scope.object.position.y;
-            newMatrix.elements[10] = scope.object.position.z;
-            v.setFromMatrixColumn( newMatrix, 2); // get Y column of objectMatrix
-            v.multiplyScalar( -distance / 10 );
+            // v.setFromMatrixColumn( objectMatrix, 1); // get Y column of objectMatrix
+            v.x = objectMatrix.elements[8];
+            v.z = objectMatrix.elements[10];
+            v.multiplyScalar( -distance*5 );
+            // v.x *= -distance;
+            // v.z *= -distance;
 
 			panOffset.add( v );
 

@@ -2,11 +2,11 @@
     if(typeof module === 'object' && typeof module.exports === 'function'){
         module.exports = factory(win)
     }else{
-        window.webShop = factory(win);
+        window.WebShop = factory(win);
     }
 })(window ? window : this, function(win){
 
-    var doc,
+    var doc,scope,
         container = document.body,
         camera, renderer, scene, control,
         // 加载的obj模型的集合
@@ -14,20 +14,22 @@
         // 存放camera摄像机，用于平滑旋转
         cameraGroup,
         // 射线，用于鼠标交互
-        raycaster = new THREE.Raycaster(),OBJECT,
+        raycaster = new THREE.Raycaster(),OBJECT,OBJECTS,
         // 记录点击或移动的鼠标的位置
         mouse,
         // 需要进行交互的物体的集合
         raycasterGroup = [],
         // 当前交互的对象
-        INTERSECTED,INTERSECTED_PARENT,
+        INTERSECTED,
         // 当前缩放倍数和旋转角度 , 按下时旋转角度
         currentScale,currentRotation, startScale, prevRotation,
         DOM,
+        HANDLES = {},
         // 默认参数
         defaults = {
             objUrl:null,
-            infoUrl:null
+            infoUrl:null,
+            done:null
         }
     ;
 
@@ -37,9 +39,14 @@
         return new WebShop.prototype.init(params);
     };
 
+    WebShop.getObjList = function(){
+        return OBJECTS;
+    };
+
     WebShop.prototype = {
         // 初始化
         init: function(params){
+            scope = this;
             defaults = Object.assign({}, defaults, params);
             // 定义场景
             scene = new THREE.Scene();
@@ -180,23 +187,18 @@
                         // child.geometry.center();
                     }
                 } );
-                console.log(item)
-                // item.rotation.z = Math.PI;
-                // console.log((new THREE.Vector3()).setFromMatrixPosition(item.matrixWorld));
-                // item.position.set(size.x / 2, index * 400 + size.y/2, size.z / 2);
                 // 添加模型辅助线
                 var helper = new THREE.BoxHelper(item, 0xff00ff);
                 helper.update();
-                INTERSECTED_PARENT = obj[0];
+                OBJECT = obj[0];
                 scene.add(helper);
 
                 object.add(item);
             });
             scene.add(object);
             self.updateDom.call(self);
-            // object = obj;
-            // 将摄像机群的中心点移动到第一个模型的中心点，这样模型的中心点就能放到屏幕中间
-            // cameraGroup.position.set(obj[0].position.x, obj[0].position.y, obj[0].position.z);
+            OBJECTS = obj;
+            self.emit('done', obj);
         },
         // 射线交互函数
         raycastFn:function(){
@@ -217,8 +219,8 @@
                     INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
                     // 设置交互时的颜色
                     INTERSECTED.material.color.setHex(0x98e8ff);
-                    this.focusObj();
-                    INTERSECTED_PARENT = INTERSECTED.parent;
+                    this.lookAt();
+                    OBJECT = INTERSECTED.parent;
                 }
             }else{
                 // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
@@ -227,28 +229,16 @@
                 INTERSECTED = null;
             }
         },
-        focusObj:function(){
-            console.log(INTERSECTED)
-            if(!INTERSECTED) return;
-            if(INTERSECTED.parent === OBJECT) return;
-            OBJECT = INTERSECTED.parent;
+        lookAt:function(index){
+            var self = this;
+            if(index===undefined && (!INTERSECTED || INTERSECTED.parent === OBJECT)) return;
+            this.updateDom(true);
+            OBJECT = index !== undefined ? OBJECTS[index] : INTERSECTED.parent;
             createjs.Tween.get(cameraGroup.position)
                 .to({x: OBJECT.position.x, y:OBJECT.position.y, z: OBJECT.position.z},600, createjs.Ease.sineInOut)
-        },
-        // 移动鼠标的操作
-        onMouseMove:function(event){
-            mouse = new THREE.Vector2();
-            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-        },
-        rotateY:function(deg){
-            // object.rotation.y = deg;
-            control.rotateLeft(deg*.1);
-        },
-        scale:function(num){
-            num = Math.max(0.1, num);
-            num = Math.min(1.9, num);
-            cameraGroup.scale.set(num, num, num);
+                .call(function(){
+                    self.updateDom.call(self);
+                })
         },
         // 添加辅助坐标系
         addAxes:function(){
@@ -268,72 +258,40 @@
             self.render();
             // self.updateDom();
         },
-        updateDom:function(){
+        updateDom:function(isHide){
             var self = this;
             if(raycasterGroup.length<=0) return;
-            var position = camera.position;
-            raycasterGroup.forEach(function(ray){
-                if(ray.dom === false) return;
-                if(ray.parent == INTERSECTED_PARENT){
-                    if(!ray.dom){
-                        var vector = self.toScreen(ray.peak);
-                        var dom = document.createElement('div');
-                        dom.innerText = ray.myName;
-                        dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
-                        DOM.appendChild(dom);
-                        ray.dom = dom;
+            if(isHide){
+                DOM.style.display = 'none';
+            }else{
+                var position = camera.position;
+                raycasterGroup.forEach(function(ray){
+                    if(ray.dom === false) return;
+                    if(ray.parent == OBJECT){
+                        if(!ray.dom){
+                            var vector = self.toScreen(ray.peak);
+                            var dom = document.createElement('div');
+                            dom.innerText = ray.myName;
+                            dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
+                            DOM.appendChild(dom);
+                            ray.dom = dom;
+                        }else{
+                            var vector = self.toScreen(ray.peak);
+                            if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return;
+                            ray.dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
+                            ray.domStyle = {
+                                x: vector.x,
+                                y: vector.y
+                            }
+                        }
                     }else{
-                        var vector = self.toScreen(ray.peak);
-                        if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return;
-                        ray.dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
-                        ray.domStyle = {
-                            x: vector.x,
-                            y: vector.y
+                        if(ray.dom){
+                            ray.dom.style.display = 'none';
                         }
                     }
-                }else{
-                    if(ray.dom){
-                        ray.dom.style.display = 'none';
-                    }
-                }
-            })
-
-            // function group(){
-            //     var p = [];
-            //     raycasterGroup.forEach(function(ray){
-            //         p.push( new Promise(function(resolve, reject){
-            //             if(ray.dom === false) return resolve();
-            //             // setTimeout(function(){
-            //                 if(!ray.dom){
-            //                     var vector = self.toScreen(ray.peak);
-            //                     var dom = document.createElement('div');
-            //                     dom.innerText = ray.name;
-            //                     dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
-            //                     DOM.appendChild(dom);
-            //                     ray.dom = dom;
-            //                     resolve()
-            //                 }else{
-            //                     var vector = self.toScreen(ray.peak);
-            //                     if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return resolve();
-            //                     ray.domStyle = {
-            //                         x: vector.x,
-            //                         y: vector.y
-            //                     }
-            //                     // setTimeout(function(){
-            //                         ray.dom.style.cssText = 'position:absolute;transform:translate('+vector.x+'px,'+vector.y+'px);font-size:1.92vw;color:blue;white-space: nowrap;';
-            //                         resolve();
-            //                     // },60)
-            //                 }
-            //             // },60);
-            //         }))
-            //     })
-            //     return p;
-            // }
-
-            // Promise.all(group()).then(function(){ DOM.style.display = 'block'})
-
-            
-            
+                })
+                DOM.style.display = 'block';
+            } 
         },
         // 渲染每一帧
         render:function(){
@@ -345,6 +303,9 @@
 
             renderer.render( scene, camera );
         },
+        done:function(fn){
+            this.on('done', fn);
+        },
         bindEvent:function(){
             var self = this;
             var mc = new Hammer(document.body);
@@ -353,12 +314,12 @@
             mc.get('pinch').set({ enable: true });
             mc.get('rotate').set({ enable: true });
             
-            mc.on('tap',function(ev){
+            document.body.addEventListener('click',function(ev){
                 mouse = new THREE.Vector2();
-                mouse.x = (ev.center.x / window.innerWidth) * 2 - 1;
-                mouse.y = -(ev.center.y / window.innerHeight) * 2 + 1 ;
+                mouse.x = (ev.pageX / window.innerWidth) * 2 - 1;
+                mouse.y = -(ev.pageY / window.innerHeight) * 2 + 1 ;
                 self.raycastFn();
-            });
+            })
             mc.on('panstart', function(ev){
                 DOM.style.display = 'none'
                 control.panStart(ev);
@@ -394,6 +355,19 @@
                 self.updateDom.call(self);
                 DOM.style.display = 'block';
             })
+
+            self.on.call(self, 'done', defaults.done);
+        },
+        emit:function(name, args){
+            if(name && HANDLES[name] && HANDLES[name].length>0){
+                HANDLES[name].forEach(function(handle){
+                    if(handle) handle.call(scope, args);
+                })
+            }
+        },
+        on:function(name,fn){
+            if( !HANDLES[name] ) HANDLES[name] = [];
+            HANDLES[name].push(fn);
         },
         toScreen:function(peak){
             var vector = new THREE.Vector3(peak.x, peak.y, peak.z);

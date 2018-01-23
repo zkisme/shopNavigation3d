@@ -9,15 +9,15 @@
     var doc,scope,
         container = document.body,
         camera, renderer, scene, control,
-        // 加载的obj模型的集合
-        object = new THREE.Group(),
+        // 加载的obj模型的集合, 和当前凝视的模型的索引
+        OBJECTS, OBJECT ,INDEX,
         // 存放camera摄像机，用于平滑旋转
         cameraGroup,
         // 射线，用于鼠标交互
-        raycaster = new THREE.Raycaster(),OBJECT,OBJECTS,
+        raycaster = new THREE.Raycaster(),
         // 记录点击或移动的鼠标的位置
         mouse,
-        // 需要进行交互的物体的集合
+        // 可交互的物体的集合
         raycasterGroup = [],
         // 当前交互的对象
         INTERSECTED,
@@ -29,7 +29,13 @@
         defaults = {
             objUrl:null,
             infoUrl:null,
-            done:null
+            done:null,
+            index:0,
+            cameraPosition:{
+                x:0,
+                y:100,
+                z:400
+            }
         }
     ;
 
@@ -39,21 +45,18 @@
         return new WebShop.prototype.init(params);
     };
 
-    WebShop.getObjList = function(){
-        return OBJECTS;
-    };
-
     WebShop.prototype = {
         // 初始化
         init: function(params){
             scope = this;
             defaults = Object.assign({}, defaults, params);
+            INDEX = defaults.index;
             // 定义场景
             scene = new THREE.Scene();
             scene.updateMatrixWorld(true);
             // 定义摄像机
             camera = new THREE.PerspectiveCamera(45, win.innerWidth / win.innerHeight, 1, 20000);
-            camera.position.set(0,100,400); // 设置相机位置
+            camera.position.set(defaults.cameraPosition.x, defaults.cameraPosition.y, defaults.cameraPosition.z); // 设置相机位置
             cameraGroup = new THREE.Group();
             cameraGroup.add(camera);
             scene.add(cameraGroup);
@@ -71,7 +74,6 @@
             renderer.setClearColor(0xffffff); // 设置背景颜色
             renderer.setPixelRatio(win.devicePixelRatio); // 设置高分屏下的显示效果(在手机屏幕上会出现位置错误，比如原点不在屏幕中心)
             renderer.setSize(win.innerWidth, win.innerHeight); // 设置画布大小
-            console.log(win.innerWidth, win.innerHeight, window.innerWidth)
             container.appendChild(renderer.domElement); // 添加画布
             container.style.cssText = 'margin:0;padding:0;overflow:hidden;position:fixed;width:100vw;height:100vh;'; // 设置画布css
 
@@ -84,14 +86,13 @@
             control.update();
 
             this.loadObj();
-            this.addAxes();
+            // this.addAxes();
             this.bindEvent();
 
             this.animate();
         },
         // 加载obj模型
         loadObj:function(url){
-            var self = this;
             var url = []; // 定义要加载的模型的地址集合
             var infoUrl = [];
             if(!defaults.objUrl){
@@ -148,7 +149,7 @@
                     return Promise.all(load(data))
                 })
                 .then(function(obj){
-                    self.loadObjhandler.call(self, obj);
+                    scope.loadObjhandler( obj);
                 })
                 .catch(function(err){
                     console.log(err);
@@ -156,13 +157,13 @@
                 })
         },
         loadObjhandler:function(obj){
-            var self = this;
             // obj是模型对象的集合
             // 全部加载完成之后执行
             obj.forEach(function(item, index){
                 // 通常item为mesh对象
                 var size = null; // 定义mesh中的几何体的大小
                 var infos = item.infos;
+                item.index = index;
                 // 将模型从 中心点在原点 移动到 边缘在原点
                 item.position.y = index * 400;
                 item.traverse( function ( child ) {
@@ -178,27 +179,24 @@
                                 child.myName = info.name;
                                 child.geometry.computeBoundingBox();
                                 size = child.geometry.boundingBox.getSize();
-                                child.peak = self.computePeak.call(self, child.geometry.boundingBox, item.position);
+                                child.peak = scope.computePeak(child.geometry.boundingBox, item.position);
                                 // 将几何体加入可交互的集合中
                                 raycasterGroup.push(child);
                             }
                         }
-                        // 设置几何体居中显示
-                        // child.geometry.center();
                     }
                 } );
                 // 添加模型辅助线
-                var helper = new THREE.BoxHelper(item, 0xff00ff);
-                helper.update();
-                OBJECT = obj[0];
-                scene.add(helper);
-
-                object.add(item);
+                // var helper = new THREE.BoxHelper(item, 0xff00ff);
+                // helper.update();
+                // scene.add(helper);
+                // object.add(item);
+                scene.add(item)
             });
-            scene.add(object);
-            self.updateDom.call(self);
             OBJECTS = obj;
-            self.emit('done', obj);
+            // OBJECT = obj[INDEX];
+            scope.updateText();
+            scope.emit('done', obj);
         },
         // 射线交互函数
         raycastFn:function(){
@@ -219,8 +217,7 @@
                     INTERSECTED.currentHex = INTERSECTED.material.color.getHex();
                     // 设置交互时的颜色
                     INTERSECTED.material.color.setHex(0x98e8ff);
-                    this.lookAt();
-                    OBJECT = INTERSECTED.parent;
+                    scope.setIndex(INTERSECTED.parent.index);
                 }
             }else{
                 // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
@@ -229,15 +226,14 @@
                 INTERSECTED = null;
             }
         },
-        lookAt:function(index){
-            var self = this;
-            if(index===undefined && (!INTERSECTED || INTERSECTED.parent === OBJECT)) return;
-            this.updateDom(true);
-            OBJECT = index !== undefined ? OBJECTS[index] : INTERSECTED.parent;
+        lookAt:function(callback){
+            scope.hideText();
             createjs.Tween.get(cameraGroup.position)
-                .to({x: OBJECT.position.x, y:OBJECT.position.y, z: OBJECT.position.z},600, createjs.Ease.sineInOut)
+                .to({x: OBJECTS[INDEX].position.x, y:OBJECTS[INDEX].position.y, z: OBJECTS[INDEX].position.z},600, createjs.Ease.sineInOut)
                 .call(function(){
-                    self.updateDom.call(self);
+                    if(callback) callback();
+                    scope.updateText();
+                    scope.showText();
                 })
         },
         // 添加辅助坐标系
@@ -250,48 +246,53 @@
         },
         // 执行动画函数
         animate:function(){
-            var self = this;
             requestAnimationFrame(function(){
-                self.animate.call(self);
+                scope.animate();
             });
             control.update();
-            self.render();
-            // self.updateDom();
+            scope.render();
+            // scope.updateText();
         },
-        updateDom:function(isHide){
-            var self = this;
+        updateText:function(){
             if(raycasterGroup.length<=0) return;
-            if(isHide){
-                DOM.style.display = 'none';
-            }else{
-                var position = camera.position;
-                raycasterGroup.forEach(function(ray){
-                    if(ray.dom === false) return;
-                    if(ray.parent == OBJECT){
-                        if(!ray.dom){
-                            var vector = self.toScreen(ray.peak);
-                            var dom = document.createElement('div');
-                            dom.innerText = ray.myName;
-                            dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
-                            DOM.appendChild(dom);
-                            ray.dom = dom;
-                        }else{
-                            var vector = self.toScreen(ray.peak);
-                            if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return;
-                            ray.dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
-                            ray.domStyle = {
-                                x: vector.x,
-                                y: vector.y
-                            }
-                        }
+            var position = camera.position;
+            raycasterGroup.forEach(function(ray){
+                if(ray.dom === false) return;
+                if(ray.parent.index == INDEX){
+                    if(!ray.dom){
+                        var vector = scope.toScreen(ray.peak);
+                        var dom = document.createElement('div');
+                        dom.innerText = ray.myName;
+                        dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
+                        DOM.appendChild(dom);
+                        ray.dom = dom;
                     }else{
-                        if(ray.dom){
-                            ray.dom.style.display = 'none';
+                        var vector = scope.toScreen(ray.peak);
+                        // if(ray.domStyle && vector.x == ray.domStyle.x && vector.y == ray.domStyle.y) return;
+                        ray.dom.style.cssText = 'position:absolute;left:'+vector.x+'px;top:'+vector.y+'px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;';
+                        ray.domStyle = {
+                            x: vector.x,
+                            y: vector.y
                         }
                     }
-                })
-                DOM.style.display = 'block';
-            } 
+                }else{
+                    if(ray.dom){
+                        ray.dom.style.display = 'none';
+                    }
+                }
+            })
+        },
+        showText:function(){
+            DOM.style.display = 'block';
+        },
+        hideText:function(){
+            DOM.style.display = 'none';
+        },
+        setIndex:function(index, callback){
+            if(index !== undefined && index !== INDEX){
+                INDEX = index;
+                scope.lookAt(callback);
+            }
         },
         // 渲染每一帧
         render:function(){
@@ -307,8 +308,8 @@
             this.on('done', fn);
         },
         bindEvent:function(){
-            var self = this;
-            var mc = new Hammer(document.body);
+            var mc = new Hammer(renderer.domElement);
+            var isPan, isRotate, isScale;
 
             var cameraGroupPostion;
             mc.get('pinch').set({ enable: true });
@@ -318,50 +319,79 @@
                 mouse = new THREE.Vector2();
                 mouse.x = (ev.pageX / window.innerWidth) * 2 - 1;
                 mouse.y = -(ev.pageY / window.innerHeight) * 2 + 1 ;
-                self.raycastFn();
+                scope.raycastFn();
             })
             mc.on('panstart', function(ev){
+                isPan = true;
                 DOM.style.display = 'none'
                 control.panStart(ev);
             })
             mc.on('panmove', function(ev){
+                if(!isPan) return;
                 control.panMove(ev);
             });
             mc.on('panend', function(ev){
+                if(!isPan) return;
                 control.panEnd(ev);
-                self.updateDom.call(self);
+                scope.updateText();
                 DOM.style.display = 'block';
+                isPan = false;
             })
             mc.on('rotatestart', function(ev){
+                isRotate = true;
                 DOM.style.display = 'none'
                 control.rotateStart(ev)
             })
             mc.on('rotatemove', function(ev){
+                if(!isRotate) return;
                 control.rotateMove(ev);
             })
             mc.on('rotateend', function(ev){
+                if(!isRotate) return;
                 control.rotateEnd(ev);
-                self.updateDom.call(self);
+                scope.updateText();
                 DOM.style.display = 'block';
+                isRotate = true;
             })
             mc.on('pinchstart', function(ev){
+                isScale = true;
                 DOM.style.display = 'none'
                 control.scaleStart(ev);
             })
             mc.on('pinchmove', function(ev){
+                if(!isScale) return;
                 control.scaleMove(ev);
             })
             mc.on('pinchend', function(ev){
-                self.updateDom.call(self);
+                if(!isScale) return;
+                scope.updateText();
                 DOM.style.display = 'block';
+                isScale = false;
             })
 
-            self.on.call(self, 'done', defaults.done);
+            window.addEventListener('resize',function(){
+                camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                scope.updateText();
+            })
+
+            scope.on('done', defaults.done);
+        },
+        reset:function(){
+            control.reset();
+            control.update();
+            if(INDEX === defaults.index){
+                scope.updateText();
+            }else{
+                INDEX = defaults.index;
+                scope.lookAt();
+            }
         },
         emit:function(name, args){
             if(name && HANDLES[name] && HANDLES[name].length>0){
                 HANDLES[name].forEach(function(handle){
-                    if(handle) handle.call(scope, args);
+                    if(handle) handle.call(scope,args);
                 })
             }
         },

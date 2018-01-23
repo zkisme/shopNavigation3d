@@ -113,7 +113,8 @@ THREE.OrbitControls = function ( object, domElement ) {
 		scope.object.updateProjectionMatrix();
 		scope.dispatchEvent( changeEvent );
 
-		scope.update();
+        scope.update();
+        scope.object.updateMatrixWorld();
 
 		state = STATE.NONE;
 
@@ -904,12 +905,9 @@ THREE.OrbitControls = function ( object, domElement ) {
         var v = new THREE.Vector3();
 
 		return function panUp2( distance, objectMatrix ) {
-            // v.setFromMatrixColumn( objectMatrix, 1); // get Y column of objectMatrix
             v.x = objectMatrix.elements[8];
             v.z = objectMatrix.elements[10];
             v.multiplyScalar( -distance*5 );
-            // v.x *= -distance;
-            // v.z *= -distance;
 
 			panOffset.add( v );
 
@@ -958,7 +956,6 @@ THREE.OrbitControls = function ( object, domElement ) {
     
     scope.panStart = function(event){
         if ( scope.enablePan === false ) return;
-        console.log(spherical.radius)
         var x = event.center.x * 220 / spherical.radius;
         var y = event.center.y * 220 / spherical.radius;
         panStart.set( x, y );
@@ -977,7 +974,8 @@ THREE.OrbitControls = function ( object, domElement ) {
 
 		panStart.copy( panEnd );
 
-		scope.update();
+        scope.update();
+        scope.object.updateMatrixWorld();
     }
 
     scope.panEnd = function(event){
@@ -999,6 +997,7 @@ THREE.OrbitControls = function ( object, domElement ) {
         rotateLeft2(_a)
         scope.update();
         prevAngle = endAngle;
+        scope.object.updateMatrixWorld();
     }
 
     scope.rotateEnd = function(event){
@@ -1015,6 +1014,7 @@ THREE.OrbitControls = function ( object, domElement ) {
         if(spherical.radius * (scale - _s) < 90) return;
         scale -= _s
         prevScale = endScale;
+        scope.object.updateMatrixWorld();
     }
 
     scope.scaleEnd = function(event){

@@ -3,10 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>商场3d导航</title>
-    <meta name="viewport" content="width=device-width">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
     <script src="http://192.168.36.87:8080/target/target-script-min.js#anonymous"></script>
 </head>
 <body>
+    <div id="load" style="position:fixed;left:0;top:0;width:100vw;height:100vh;background:#34495E;text-align:center;color:#fff;z-index:999;opacity:1;">
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">
+            <img src="./img/rings.svg" alt="">
+            <p>加载中，请稍候</p>
+        </div>
+    </div>
 <script src="./js/hammer.js"></script>
 <script src="./js/three.js"></script>
 <script src="./js/OrbitControls.js"></script>

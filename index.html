@@ -1,11 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>商场3d导航</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=0" />
+    <!-- webapp强制全屏模式 -->
+    <meta name="viewport" content="width=device-width,initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no,minimal-ui">
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- 隐藏状态栏/设置状态栏颜色： -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- uc强制竖屏 -->
+    <meta name="screen-orientation" content="portrait">
+    <!-- UC强制全屏 -->
+    <meta name="full-screen" content="yes">
+    <!-- UC应用模式 -->
+    <meta name="browsermode" content="application">
+    <!-- QQ强制竖屏 -->
+    <meta name="x5-orientation" content="portrait">
+    <!-- QQ强制全屏 -->
+    <meta name="x5-fullscreen" content="true">
+    <!-- QQ强制全屏 -->
+    <meta name="x5-fullscreen" content="true">
     <script src="http://192.168.36.87:8080/target/target-script-min.js#anonymous"></script>
 </head>
+
 <body>
     <div id="load" style="position:fixed;left:0;top:0;width:100vw;height:100vh;background:#34495E;text-align:center;color:#fff;z-index:999;opacity:1;">
         <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);">
@@ -13,12 +31,13 @@
             <p>加载中，请稍候</p>
         </div>
     </div>
-<script src="./js/hammer.js"></script>
-<script src="./js/three.js"></script>
-<script src="./js/OrbitControls.js"></script>
-<script src="./js/TDSLoader.js"></script>
-<script src="./js/tweenjs-0.6.2.min.js"></script>
-<script src="./js/webShop.js"></script>
-<script src="./js/index.js"></script>
+    <script src="./js/hammer.js"></script>
+    <script src="./js/three.js"></script>
+    <script src="./js/OrbitControls.js"></script>
+    <script src="./js/TDSLoader.js"></script>
+    <script src="./js/tweenjs-0.6.2.min.js"></script>
+    <script src="./js/webShop.js"></script>
+    <script src="./js/index.js"></script>
 </body>
+
 </html>

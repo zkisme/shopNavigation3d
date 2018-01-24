@@ -1,0 +1,16 @@
+{
+  "name": "webshop",
+  "version": "1.0.0",
+  "description": "3D楼层视图",
+  "main": "index.js",
+  "repository": "https://github.com/zkisme/shopNavigation3d.git",
+  "author": "Narney <709447790@qq.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "gulp": "^3.9.1",
+    "gulp-clean": "^0.4.0",
+    "gulp-concat": "^2.6.1",
+    "gulp-rename": "^1.2.2",
+    "gulp-uglify": "^3.0.0"
+  }
+}

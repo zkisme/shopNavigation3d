@@ -51,12 +51,16 @@
         INTERSECTED, // 当前交互的对象
         DOM, // 存放标注信息的dom
         HANDLES = {}, // 存放观察者模式中的函数
+        FLOORS = [], // 楼层dom
+        LINE , // 线段
+        LINEGEO = null, // 线段集合体
+        count= 0,
         // 默认参数
         defaults = {
             objUrl: null, // 加载的模型的url， 可以为数组或者字符串
             infoUrl: null, // 加载的模型对应的标注和颜色信息， 可以为数组或者字符串， 顺序要与objUrl相同
             index: 0, // 初始化显示的模型的索引
-            gap: 400, // 多个模型之间的高度间距
+            gap: 200, // 多个模型之间的高度间距
             isFloor: true, // 是否需要楼层
             isReset: true, // 是否需要重置按钮
             isBack: true, // 是否需要返回按钮
@@ -81,7 +85,6 @@
             scope = this;
             // 初始化参数
             defaults = Object.assign({}, defaults, params);
-            INDEX = defaults.index;
             // 定义场景
             scene = new THREE.Scene();
             scene.updateMatrixWorld(true);
@@ -114,6 +117,7 @@
             renderer.setClearColor(0xffffff); // 设置背景颜色
             renderer.setPixelRatio(win.devicePixelRatio); // 设置高分屏下的显示效果(在手机屏幕上会出现位置错误，比如原点不在屏幕中心)
             renderer.setSize(win.innerWidth, win.innerHeight); // 设置画布大小
+            renderer.domElement.id = 'canvas'
             container.appendChild(renderer.domElement); // 添加画布
             container.style.cssText =
                 "margin:0;padding:0;overflow:hidden;position:fixed;width:100vw;height:100vh;"; // 设置画布css
@@ -278,13 +282,14 @@
             if (defaults.isReset) scope.addReset();
             if (defaults.isBack) scope.addBack();
             // 加载完成，执行done事件
+            scope.setIndex(defaults.index)
             scope.emit("done", obj);
         },
         // 添加楼层信息
         addFloor: function() {
-            var navigation = document.createElement("ul");
-            navigation.style.cssText =
-                "position:fixed;left:10px;bottom:50px;z-index:9;overflow-x:hidden;overflow-y:scroll;width:30px;background:#34495E;border-radius:4px;padding:0;margin:0;list-style:none;max-height:120px;color:#fff;";
+            $floor = document.createElement("ul");
+            $floor.style.cssText =
+                "position:fixed;left:10px;bottom:50px;z-index:9;overfloW:hidden;width:30px;background:#34495E;border-radius:4px;padding:0;margin:0;list-style:none;color:#fff;";
 
             OBJECTS.forEach(function(item, index) {
                 var li = document.createElement("li");
@@ -296,9 +301,10 @@
                     e.stopPropagation();
                     scope.setIndex(index);
                 };
-                navigation.insertBefore(li, navigation.lastChild);
+                $floor.insertBefore(li, $floor.firstChild);
+                FLOORS.push(li);
             });
-            document.body.appendChild(navigation);
+            document.body.appendChild($floor);
         },
         // 添加重置按钮
         addReset: function() {
@@ -347,6 +353,109 @@
                 y ? y : 0
             );
         },
+        setLocalIndex:function(){
+            LOCAL.position.y = 3 + INDEX * defaults.gap
+        },
+        lineStart:function(x, y, index){
+            LINE = null;
+            x = x || 0;
+            y = y || 0;
+            index = index !== undefined ? index : INDEX;
+            LINEGEO = new THREE.Geometry();
+            LINEGEO.vertices.push(new THREE.Vector3(
+                x,
+                3 + index * defaults.gap,
+                y
+            ))
+            LINEGEO.len = 0;
+        },
+        lineTo:function(x, y, index){
+            if(!LINEGEO)return;
+            index = index !== undefined ? index : INDEX;
+            var v = new THREE.Vector3(
+                x,
+                3 + index * defaults.gap,
+                y
+            )
+            LINEGEO.vertices.push(v)
+            LINEGEO.len += v.distanceTo(LINEGEO.vertices[LINEGEO.vertices.length -2])
+        },
+        lineEnd:function(x, y, index){
+            index = index !== undefined ? index : INDEX;
+            var v = new THREE.Vector3(
+                x,
+                3 + index * defaults.gap,
+                y
+            )
+            LINEGEO.vertices.push(v)
+            LINEGEO.len += v.distanceTo(LINEGEO.vertices[LINEGEO.vertices.length -2])
+            scope.lineMesh();
+        },
+        lineMesh:function( offset){
+            var canvas = document.createElement('canvas');
+            var len = 32;
+            offset = offset ? offset % len : 0;
+            var vector = [
+                [offset % (2*len), 0],
+                [( len /2 + offset) % (2*len) , len /2],
+                [offset % (2*len)  , len],
+                [( len /2 + offset) % (2*len) , len],
+                [( len + offset) % (2*len) , len /2],
+                [( len / 2 + offset) % (2*len) , 0]
+            ]
+            canvas.width = len;
+            canvas.height = len;
+            var ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,len,len);
+            ctx.fillStyle = '#ff0000';
+            for (var j = -1; j < 1; j++){
+                ctx.beginPath();
+                
+                for (var i = 0; i < vector.length; i ++){
+                    var v = vector[i]
+                    if(i == 0) {
+                        ctx.moveTo(v[0] + j * len,v[1])
+                    }else{
+                        ctx.lineTo(v[0] + j * len,v[1])
+                    }
+                }
+                ctx.fill();
+                ctx.closePath();
+            }
+            var texture  = new THREE.Texture(canvas)
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            texture.matrixAutoUpdate = true
+            texture.needsUpdate = true
+
+            var material = new MeshLineMaterial({ 
+                color: new THREE.Color(0xffffff),
+                useMap:true,
+                map: texture,
+                repeat:new THREE.Vector2(LINEGEO.len / 8,1),
+                resolution: new THREE.Vector2(window.innerWidth,window.innerHeight),
+                blending: THREE.NormalBlending,
+                transparent: true,
+                near: camera.near,
+                far: camera.far,
+                depthTest: false,
+                sizeAttenuation: true
+                
+            });
+            var line = new MeshLine();
+            line.setGeometry( LINEGEO , function(){return 8});
+            LINE = new THREE.Mesh( line.geometry, material )
+            scene.add(LINE)
+        },
+        updateLineMaterial:function(){
+            if(!LINE) return;
+            scene.remove(LINE)
+            scope.lineMesh( count)
+        },
+        cleanLine:function(){
+            scene.remove(LINE);
+            LINE = null;
+            LINEGEO = null;
+        },
         // 射线交互函数
         raycastFn: function() {
             // 如果没有坐标信息，不继续执行
@@ -370,6 +479,7 @@
                     // 设置交互时的颜色
                     INTERSECTED.material.color.setHex(0x98e8ff);
                     scope.setIndex(INTERSECTED.parent.index);
+                    scope.emit('select', INTERSECTED);
                 }
             } else {
                 // 如果有当前交互对象，将当前交互对象的颜色设置为当前值，这个操作时复位颜色
@@ -378,6 +488,12 @@
                 // 清空当前交互物体
                 INTERSECTED = null;
             }
+        },
+        onselect:function(fn){
+            scope.on('select',fn)
+        },
+        getSelect:function(){
+            return INTERSECTED;
         },
         // 将视线聚焦到当前INDEX索引的物体上， 有个动画过渡的效果
         lookAt: function(callback) {
@@ -413,9 +529,12 @@
             requestAnimationFrame(function() {
                 scope.animate();
             });
+            if(count >= 10000) count = 0;
+            count ++;
             control.update();
             scope.render();
-            // scope.updateText();
+            scope.updateLineMaterial();
+            if(LOCAL) camera.lookAt(LOCAL);
         },
         // 渲染每一帧
         render: function() {
@@ -453,7 +572,7 @@
                                 vector.x +
                                 "px;top:" +
                                 vector.y +
-                                "px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;";
+                                "px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;opacity:" + vector.opacity+ ";";
                         }
                         DOM.appendChild(dom);
                         // 将添加的标注html赋值给物体的dom属性
@@ -469,7 +588,7 @@
                             vector.x +
                             "px;top:" +
                             vector.y +
-                            "px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;";
+                            "px;transform:translate(-50%,-50%);font-size:1.92vw;white-space: nowrap;opacity:" + vector.opacity+ ";";
                     }
                 } else {
                     // 如果物体的父级的索引不是当前模型的索引，判断这个物体是否有标注的dom，如果有也隐藏掉，因为不需要显示
@@ -492,6 +611,14 @@
             // 如果参数中有索引并且索引和当前索引不同才继续执行
             if (index !== undefined && index !== INDEX) {
                 INDEX = index;
+                FLOORS.forEach(function(item, i){
+                    if(i === index){
+                        item.style.background = '#DC0000';
+                    }else{
+                        item.style.background = 'none'
+                    }
+                })
+                scope.setLocalIndex();
                 scope.lookAt(callback);
             }
         },
@@ -573,17 +700,20 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
                 scope.updateText();
             });
+            
         },
         // 重置摄像机
         reset: function() {
             control.reset();
             control.update();
-            if (INDEX === defaults.index) {
-                scope.updateText();
-            } else {
-                INDEX = defaults.index;
-                scope.lookAt();
-            }
+            scope.updateText();
+            // if (INDEX === defaults.index) {
+            //     scope.updateText();
+            // } else {
+            //     INDEX = defaults.index;
+            //     scope.lookAt();
+            // }
+            scope.cleanLine();
         },
         // 触发自定义事件
         emit: function(name, args) {
@@ -601,6 +731,20 @@
         // 将三维坐标转换成屏幕坐标
         toScreen: function(peak) {
             var vector = new THREE.Vector3(peak.x, peak.y, peak.z);
+            var cameraPos = new THREE.Vector3();
+            cameraPos = cameraPos.setFromMatrixPosition(camera.matrix)
+            cameraPos.x += cameraGroup.position.x;
+            cameraPos.y += cameraGroup.position.y;
+            cameraPos.z += cameraGroup.position.z;
+            var distance = Math.round( vector.distanceToSquared(cameraPos) );
+            var opacity = 1;
+            if(distance > 1000000) {
+                opacity = 0;
+            }else if(distance < 100000){
+                opacity = 1
+            }else{
+                opacity = (1000000 - distance) / 1000000
+            }
             var standardVector = vector.project(camera);
             // 如果超出屏幕，返回false， standardVector.y是让远处的标注不显示
             if (
@@ -614,7 +758,9 @@
                 var b = window.innerHeight / 2;
                 return {
                     x: Math.round(standardVector.x * a + a),
-                    y: Math.round(-standardVector.y * b + b)
+                    y: Math.round(-standardVector.y * b + b),
+                    z: distance,
+                    opacity : opacity
                 };
             } else {
                 return false;

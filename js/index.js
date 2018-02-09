@@ -17,8 +17,10 @@ var webshop = WebShop({
 
 webshop.done(function(obj) {
     document.getElementById("load").style.display = "none";
-    webshop.setLocal(-15, 0, 0);
-    webshop.moveLocal({
+
+    var v1 = webshop.addLocal();
+    v1.setLocal(-15, 0, 0)
+    v1.moveLocal({
         target:[{x:-15, y:100},{x:50, y:100}],
         time:[2000,5000],
         callback:function(){
@@ -26,13 +28,24 @@ webshop.done(function(obj) {
         }
     })
 
-    webshop.addLinePoint([
+    var v2 = webshop.addLocal(6, 0xff00ff);
+    v2.setLocal(-15, 150)
+
+    // v2.remove();
+
+    var l1 = webshop.addLine([
         [-15, 0, 0],
         [-15, 100, 0],
         [45, 100, 0]
     ]);
 
-    webshop.addLinePoint(-50,200,1)
+    l1.addPoint(-50,200,1)
+
+    var l2 = webshop.addLine([
+        [-15, 0, 1],
+        [-15, 100, 1],
+        [45, 100, 1]
+    ])
 
     webshop.onselect(function(obj){
         console.log(obj)

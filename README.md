@@ -21,6 +21,37 @@
 - 点击可交互物体返回物体信息，用于自定义
 - gulp打包，所用插件库打包成vender.min.js文件，减少http请求和大小
 
+## 2018-2-9更新记录
+1. 添加线条和位置点更改为工厂模式，自动返回实例，实例包含方法可操作当前物体
+
+2. 更新scope.addLocal(size, color)， 创建一个位置，
+    - size: 位置几何体的大小，
+    - color： 几何体的颜色，需 0x开头的16进制色值，如0xffffff
+
+    返回位置的实例， 实例包含如下方法
+    - getLocal()  返回此物体的位置坐标
+    - setLocal(x, y, index) 设置此物体的坐标
+    - moveLocal(x, y, index) 移动此物体的坐标，有过度效果
+    - remove() 移除此物体
+
+3. 添加 scope.cleanAllLocal() 移除所有位置物体
+
+4. 添加 scope.addLine(x, y ,index, size, img), 创建一个线条
+
+    - x: x坐标，
+    - y：对应z坐标
+    - index： 楼层索引
+    - size： 线条粗细
+    - img：线条贴图
+
+    返回线条实例，实例包含如下方法
+
+    - addPoint(x, y, index) 添加线条点
+    - updateLine() 更新线条
+    - remove() 移除当前线条
+
+5. 新增 scope.cleanAllLine() 清除所有线条 
+
 ## 使用
 
 **引用**
